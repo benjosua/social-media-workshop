@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Live Workshop Companion | Social Media Reality</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    .glass { background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+    .gradient-bg { background: radial-gradient(circle at 20% 20%, #1e1b4b 0%, #0f172a 50%, #030712 100%); }
+  </style>
+</head>
+<body class="gradient-bg text-slate-100 min-h-screen flex flex-col justify-between selection:bg-indigo-500 selection:text-white pb-10">
+
+  <!-- Top bar: Live sync indicator & Language selector -->
+  <header class="p-4 border-b border-white/10 flex items-center justify-between sticky top-0 bg-black/40 backdrop-blur-md z-50">
+    <div class="flex items-center space-x-2">
+      <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+      <span class="text-xs uppercase font-bold tracking-wider text-slate-300">Slide <span id="currentSlideNum">1</span>/15</span>
+    </div>
+
+    <!-- Live language selector -->
+    <div class="flex items-center space-x-1">
+      <span class="text-xs text-slate-400 mr-1">🌐</span>
+      <select id="langSelect" class="bg-slate-800/90 text-xs font-semibold text-white px-2 py-1 rounded border border-white/20 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+        <option value="en">🇬🇧 English</option>
+        <option value="de">🇩🇪 Deutsch</option>
+        <option value="es">🇪🇸 Español</option>
+        <option value="fr">🇫🇷 Français</option>
+      </select>
+    </div>
+  </header>
+
+  <!-- Main dynamic interactive container -->
+  <main class="flex-1 p-4 max-w-lg w-full mx-auto flex flex-col justify-center">
+
+    <!-- Live Translated Header for current slide -->
+    <div class="glass border border-white/15 rounded-2xl p-5 mb-5 shadow-2xl transition-all duration-300">
+      <div id="slideBadge" class="text-[11px] font-bold uppercase tracking-widest text-indigo-400 mb-1">Live Slide Focus</div>
+      <h1 id="slideTitle" class="text-xl font-extrabold text-white tracking-tight leading-snug">Connecting...</h1>
+      <p id="slideSubtitle" class="text-xs text-slate-300 mt-1.5 leading-relaxed"></p>
+      <div id="slideQuote" class="hidden mt-3 p-3 bg-white/5 border-l-2 border-indigo-400 italic text-xs text-slate-200 rounded-r"></div>
+    </div>
+
+    <!-- Dynamic interaction zone depending on current slide -->
+    <div id="interactionZone" class="glass border border-white/15 rounded-2xl p-5 shadow-xl transition-all">
+      <p class="text-center text-sm text-slate-400 py-6">Synchronizing with presenter...</p>
+    </div>
+
+    <!-- Notification toast -->
+    <div id="statusToast" class="opacity-0 transition-opacity duration-300 mt-4 text-center text-xs text-emerald-400 font-medium py-1 px-3 bg-emerald-950/60 border border-emerald-500/30 rounded-full mx-auto max-w-xs">
+      Response received!
+    </div>
+
+  </main>
+
+  <!-- Footer with participant count -->
+  <footer class="p-3 text-center border-t border-white/10 text-[11px] text-slate-400">
+    <span>Live Workshop Session</span> • <span id="onlineCount" class="font-bold text-indigo-300">1</span> participants joined
+  </footer>
+
+  <script>
+    const socket = io();
+    let currentLang = 'en';
+    let appState = null;
+
+    const currentSlideNumEl = document.getElementById('currentSlideNum');
+    const langSelect = document.getElementById('langSelect');
+    const slideTitleEl = document.getElementById('slideTitle');
+    const slideSubtitleEl = document.getElementById('slideSubtitle');
+    const slideQuoteEl = document.getElementById('slideQuote');
+    const interactionZone = document.getElementById('interactionZone');
+    const onlineCountEl = document.getElementById('onlineCount');
+    const statusToast = document.getElementById('statusToast');
+
+    function showToast(msg = 'Sent to screen! ✓') {
+      statusToast.innerText = msg;
+      statusToast.classList.remove('opacity-0');
+      setTimeout(() => statusToast.classList.add('opacity-0'), 2200);
+    }
+
+    langSelect.addEventListener('change', (e) => {
+      currentLang = e.target.value;
+      renderCurrentSlide();
+    });
+
+    socket.on('participantCount', (count) => {
+      onlineCountEl.innerText = count;
+    });
+
+    socket.on('syncState', (state) => {
+      appState = state;
+      renderCurrentSlide();
+    });
+
+    socket.on('slideChanged', (data) => {
+      if (appState) {
+        appState.currentSlide = data.currentSlide;
+      }
+      renderCurrentSlide();
+    });
+
+    function getTranslation(slideNum) {
+      if (!appState || !appState.translations) return null;
+      const langPack = appState.translations[currentLang] || appState.translations['en'];
+      return langPack ? langPack[slideNum] : null;
+    }
+
+    function renderCurrentSlide() {
+      if (!appState) return;
+      const slide = appState.currentSlide || 1;
+      currentSlideNumEl.innerText = slide;
+
+      const trans = getTranslation(slide) || {};
+      slideTitleEl.innerText = trans.title || `Slide ${slide}`;
+      slideSubtitleEl.innerText = trans.subtitle || '';
+
+      if (trans.quote) {
+        slideQuoteEl.innerText = trans.quote;
+        slideQuoteEl.classList.remove('hidden');
+      } else {
+        slideQuoteEl.classList.add('hidden');
+      }
+
+      renderSlideInteractiveUI(slide, trans);
+    }
+
+    function renderSlideInteractiveUI(slide, trans) {
+      // Slide 1: Welcome & quick warmup
+      if (slide === 1) {
+        interactionZone.innerHTML = `
+          <div class="text-center py-4 space-y-3">
+            <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-indigo-600/30 border border-indigo-400/40 text-2xl">
+              👋
+            </div>
+            <h3 class="font-bold text-base text-white">You are connected!</h3>
+            <p class="text-xs text-slate-300">As the presenter moves through slides, your phone will automatically switch to live questions, translation, and anonymous polls.</p>
+            <div class="p-3 bg-white/5 rounded-xl border border-white/10 text-xs text-indigo-300">
+              💡 Select your preferred language at the top right anytime.
+            </div>
+          </div>
+        `;
+      }
+      // Slide 2: Predict screen time
+      else if (slide === 2) {
+        interactionZone.innerHTML = `
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-200 mb-1.5">${trans.prompt1 || 'Which app took the most time yesterday?'}</label>
+              <div class="grid grid-cols-2 gap-2">
+                ${['Instagram', 'TikTok', 'YouTube', 'X (Twitter)', 'Reddit', 'Snapchat'].map(app => `
+                  <button onclick="voteApp('${app}')" class="p-2.5 rounded-xl bg-white/10 hover:bg-indigo-600/60 border border-white/10 text-xs font-medium transition active:scale-95 text-center">
+                    ${app}
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+
+            <div class="pt-3 border-t border-white/10">
+              <label class="block text-xs font-semibold text-slate-200 mb-2">${trans.prompt2 || 'Now check Screen Time. How accurate were you?'}</label>
+              <div class="grid grid-cols-2 gap-2">
+                <button onclick="voteAccuracy('accurate')" class="p-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/40 border border-emerald-500/40 text-xs font-medium">🎯 Spot on</button>
+                <button onclick="voteAccuracy('under1h')" class="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-xs font-medium">&lt; 1 h off</button>
+                <button onclick="voteAccuracy('oneToTwoH')" class="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-xs font-medium">1–2 h off</button>
+                <button onclick="voteAccuracy('over2h')" class="p-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/40 border border-rose-500/40 text-xs font-medium">&gt; 2 h off</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      // Slide 3: Screen time brackets
+      else if (slide === 3) {
+        const brackets = ['<2 h', '2–3 h', '3–4 h', '4–5 h', '5–6 h', '6–8 h', '8 h+'];
+        interactionZone.innerHTML = `
+          <div class="space-y-2.5">
+            <p class="text-xs text-slate-300 font-medium">${trans.prompt || 'Yesterday, my total screen time was:'}</p>
+            <div class="grid grid-cols-1 gap-2">
+              ${brackets.map(b => `
+                <button onclick="voteScreenTime('${b}')" class="w-full text-left px-4 py-2.5 rounded-xl bg-white/10 hover:bg-indigo-600/60 border border-white/10 text-xs font-semibold flex items-center justify-between transition active:scale-98">
+                  <span>${b}</span>
+                  <span class="text-[10px] text-slate-400">Vote</span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+      // Slide 4: What is that time worth?
+      else if (slide === 4) {
+        const quickPicks = ['Sleep 😴', 'Study 📚', 'Exercise 🏃‍♂️', 'Friends 👥', 'Read 📖', 'Hobby 🎸', 'Nothing / Relax 🌿'];
+        interactionZone.innerHTML = `
+          <div class="space-y-3">
+            <label class="block text-xs font-medium text-slate-200 leading-snug">${trans.prompt || 'If you could get 30 minutes back, what would you do?'}</label>
+            <div class="flex flex-wrap gap-1.5">
+              ${quickPicks.map(p => `
+                <button onclick="submitTextWorth('${p.replace(/[^a-zA-Z\s]/g, '').trim()}')" class="px-3 py-1.5 rounded-full bg-white/10 hover:bg-indigo-600 text-xs font-medium border border-white/10">
+                  ${p}
+                </button>
+              `).join('')}
+            </div>
+            <div class="flex gap-2 pt-2">
+              <input id="timeWorthInput" type="text" placeholder="Or type your own..." class="flex-1 px-3 py-2 text-xs rounded-xl bg-white/5 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              <button onclick="submitCustomWorth()" class="px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white">Send</button>
+            </div>
+          </div>
+        `;
+      }
+      // Slide 5: Research predictions
+      else if (slide === 5) {
+        interactionZone.innerHTML = `
+          <div class="space-y-4">
+            <div>
+              <p class="text-xs font-semibold text-slate-200 mb-2">${trans.prompt1 || 'What do you think heavy short-form video relates to most?'}</p>
+              <div class="grid grid-cols-2 gap-2">
+                ${['IQ', 'Attention', 'Sleep', 'Anxiety/depression', 'Academic performance', 'Nothing meaningful'].map(opt => `
+                  <button onclick="voteEvidenceMetric('${opt}')" class="p-2.5 rounded-xl bg-white/10 hover:bg-indigo-600/60 border border-white/10 text-xs font-medium text-center">
+                    ${opt}
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+            <div class="pt-3 border-t border-white/10">
+              <p class="text-xs font-semibold text-slate-200 mb-2">${trans.prompt2 || 'Which evidence would convince you more?'}</p>
+              <div class="grid grid-cols-2 gap-2">
+                ${['One large survey', 'Longitudinal study', 'Randomized experiment', 'Meta-analysis'].map(opt => `
+                  <button onclick="voteStudyType('${opt}')" class="p-2.5 rounded-xl bg-white/10 hover:bg-purple-600/60 border border-white/10 text-xs font-medium text-center">
+                    ${opt}
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      // Slide 6, 7, 8, 10: Study insights slide (Viewer mode with highlight notes)
+      else if ([6, 7, 8, 10].includes(slide)) {
+        interactionZone.innerHTML = `
+          <div class="space-y-3 py-2">
+            <div class="flex items-center space-x-2 text-indigo-400 text-xs font-bold uppercase tracking-wider">
+              <span>🔬 Scientific Evidence Spotlight</span>
+            </div>
+            <div class="p-4 rounded-xl bg-white/5 border border-white/10 text-xs leading-relaxed text-slate-200 space-y-2">
+              <p class="font-semibold text-white">${trans.takeaway || ''}</p>
+              <p class="text-[11px] text-slate-400 italic">Follow the main projector screen for charts and effect sizes (Nguyen '25, Ahmed '24, Castelo '25).</p>
+            </div>
+            <div class="flex gap-2">
+              <button onclick="sendQuickReaction('💡 Mind blown')" class="flex-1 py-2 text-xs bg-white/10 hover:bg-white/20 rounded-xl border border-white/10">💡 Surprise</button>
+              <button onclick="sendQuickReaction('🤔 Skeptical')" class="flex-1 py-2 text-xs bg-white/10 hover:bg-white/20 rounded-xl border border-white/10">🤔 Skeptical</button>
+              <button onclick="sendQuickReaction('👍 Makes sense')" class="flex-1 py-2 text-xs bg-white/10 hover:bg-white/20 rounded-xl border border-white/10">👍 Agree</button>
+            </div>
+          </div>
+        `;
+      }
+      // Slide 9: Where did the time go?
+      else if (slide === 9) {
+        const cats = ['Another screen', 'Studying', 'Exercise', 'Face-to-face socializing', 'Sleep', 'Outdoors', 'Nothing'];
+        interactionZone.innerHTML = `
+          <div class="space-y-2.5">
+            <p class="text-xs font-semibold text-slate-200">${trans.prompt || 'If mobile internet is blocked, where do you think the time goes?'}</p>
+            <div class="grid grid-cols-1 gap-1.5">
+              ${cats.map(c => `
+                <button onclick="voteTimeGo('${c}')" class="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-indigo-600/60 border border-white/10 text-xs font-medium text-left flex justify-between">
+                  <span>${c}</span>
+                  <span class="text-slate-400 text-[10px]">Vote</span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+      // Slide 11: Triggers
+      else if (slide === 11) {
+        const trigList = [
+          'immediately after waking',
+          'before sleep',
+          'while studying',
+          'when bored',
+          'when stressed',
+          'after a notification',
+          'while waiting',
+          'without really deciding'
+        ];
+        interactionZone.innerHTML = `
+          <div class="space-y-2.5">
+            <p class="text-xs font-semibold text-slate-200">${trans.prompt || 'When do you most automatically reach for social media?'}</p>
+            <div class="grid grid-cols-1 gap-1.5">
+              ${trigList.map(t => `
+                <button onclick="voteTrigger('${t}')" class="px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-indigo-600/60 border border-white/10 text-xs font-medium text-left">
+                  ⚡ ${t}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+      // Slide 12: Design phone ideas
+      else if (slide === 12) {
+        interactionZone.innerHTML = `
+          <div class="space-y-3">
+            <p class="text-xs font-semibold text-slate-200">${trans.prompt || 'Submit low-willpower friction tricks for your phone:'}</p>
+            <div class="flex gap-2">
+              <input id="phoneIdeaInput" type="text" placeholder="e.g. Grayscale mode, phone in hallway" class="flex-1 px-3 py-2 text-xs rounded-xl bg-white/5 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              <button onclick="submitPhoneIdea()" class="px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white">Post</button>
+            </div>
+            <div class="flex flex-wrap gap-1.5 pt-1">
+              ${['Grayscale screen', 'Delete TikTok/Reels', 'Charge outside bedroom', 'Notifications OFF', 'Web-only login'].map(quick => `
+                <button onclick="document.getElementById('phoneIdeaInput').value='${quick}'; submitPhoneIdea();" class="px-2.5 py-1 text-[11px] rounded-lg bg-white/5 border border-white/10 hover:bg-white/15">
+                  + ${quick}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+      // Slide 13: 7-day experiment
+      else if (slide === 13) {
+        const levels = [
+          'Level 1: Reduce (≤60m/no short form)',
+          'Level 2: Remove (delete apps, desktop only)',
+          'Level 3: Quit (no social 7 days)'
+        ];
+        const outcomes = ['better sleep', 'better concentration', 'better mood', 'more boredom', 'more time', 'no difference', 'harder than expected'];
+        interactionZone.innerHTML = `
+          <div class="space-y-4">
+            <div>
+              <p class="text-xs font-semibold text-slate-200 mb-2">1. Choose your level:</p>
+              <div class="space-y-1.5">
+                ${levels.map(l => `
+                  <button onclick="voteExperimentLevel('${l}')" class="w-full text-left p-2.5 rounded-xl bg-white/10 hover:bg-indigo-600/60 border border-white/10 text-xs font-medium">
+                    ${l}
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+            <div class="pt-3 border-t border-white/10">
+              <p class="text-xs font-semibold text-slate-200 mb-2">2. What do you predict will happen?</p>
+              <div class="grid grid-cols-2 gap-1.5">
+                ${outcomes.map(o => `
+                  <button onclick="voteExperimentOutcome('${o}')" class="p-2 rounded-xl bg-white/10 hover:bg-purple-600/60 border border-white/10 text-xs font-medium text-center">
+                    ${o}
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      // Slide 14: IF-THEN specific rule
+      else if (slide === 14) {
+        interactionZone.innerHTML = `
+          <div class="space-y-3">
+            <p class="text-xs font-semibold text-slate-200 leading-snug">Lock in your Implementation Intention (Gollwitzer rule):</p>
+            <div class="space-y-2">
+              <div>
+                <label class="block text-[11px] text-indigo-300 font-bold uppercase mb-1">IF (Trigger occurs):</label>
+                <input id="ifTriggerInput" type="text" placeholder="e.g. I get into bed / reach for phone while studying" class="w-full px-3 py-2 text-xs rounded-xl bg-white/5 border border-white/20 text-white focus:ring-2 focus:ring-indigo-400" />
+              </div>
+              <div>
+                <label class="block text-[11px] text-emerald-300 font-bold uppercase mb-1">THEN I will (Action):</label>
+                <input id="thenActionInput" type="text" placeholder="e.g. Leave phone outside bedroom / drink water instead" class="w-full px-3 py-2 text-xs rounded-xl bg-white/5 border border-white/20 text-white focus:ring-2 focus:ring-emerald-400" />
+              </div>
+              <button onclick="submitIfThenRule()" class="w-full py-2.5 mt-2 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl font-bold text-xs text-white shadow-lg">Commit Rule</button>
+            </div>
+          </div>
+        `;
+      }
+      // Slide 15: Final reflection
+      else if (slide === 15) {
+        interactionZone.innerHTML = `
+          <div class="space-y-3">
+            <p class="text-xs font-semibold text-slate-200">What will you test for the next seven days?</p>
+            <textarea id="finalReflectionInput" rows="2" placeholder="One intention or key realization..." class="w-full px-3 py-2 text-xs rounded-xl bg-white/5 border border-white/20 text-white focus:ring-2 focus:ring-indigo-400"></textarea>
+            <button onclick="submitReflection()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold text-xs text-white">Share Reflection</button>
+          </div>
+        `;
+      }
+    }
+
+    // Action dispatchers
+    window.voteApp = (app) => { socket.emit('submitAppGuess', app); showToast(); };
+    window.voteAccuracy = (acc) => { socket.emit('submitAccuracy', acc); showToast(); };
+    window.voteScreenTime = (val) => { socket.emit('submitScreenTime', val); showToast(); };
+    window.submitTextWorth = (val) => { socket.emit('submitTimeWorth', val); showToast(); };
+    window.submitCustomWorth = () => {
+      const val = document.getElementById('timeWorthInput').value;
+      if (val) { socket.emit('submitTimeWorth', val); document.getElementById('timeWorthInput').value = ''; showToast(); }
+    };
+    window.voteEvidenceMetric = (m) => { socket.emit('submitEvidenceMetric', m); showToast(); };
+    window.voteStudyType = (s) => { socket.emit('submitStudyType', s); showToast(); };
+    window.voteTimeGo = (cat) => { socket.emit('submitTimeGo', cat); showToast(); };
+    window.voteTrigger = (t) => { socket.emit('submitTrigger', t); showToast(); };
+    window.submitPhoneIdea = () => {
+      const val = document.getElementById('phoneIdeaInput').value;
+      if (val) { socket.emit('submitPhoneIdea', val); document.getElementById('phoneIdeaInput').value = ''; showToast(); }
+    };
+    window.voteExperimentLevel = (lvl) => { socket.emit('submitExperimentLevel', lvl); showToast(); };
+    window.voteExperimentOutcome = (outc) => { socket.emit('submitExperimentOutcome', outc); showToast(); };
+    window.submitIfThenRule = () => {
+      const trig = document.getElementById('ifTriggerInput').value;
+      const resp = document.getElementById('thenActionInput').value;
+      if (trig && resp) {
+        socket.emit('submitIfThen', { trigger: trig, response: resp });
+        document.getElementById('ifTriggerInput').value = '';
+        document.getElementById('thenActionInput').value = '';
+        showToast('Rule recorded! 🎉');
+      }
+    };
+    window.submitReflection = () => {
+      const val = document.getElementById('finalReflectionInput').value;
+      if (val) { socket.emit('submitReflection', val); document.getElementById('finalReflectionInput').value = ''; showToast('Thank you! 🚀'); }
+    };
+    window.sendQuickReaction = (text) => {
+      socket.emit('submitTimeWorth', text);
+      showToast('Reaction sent!');
+    };
+  </script>
+</body>
+</html>
