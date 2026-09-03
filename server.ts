@@ -4,6 +4,7 @@ import { Server, Socket } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import os from 'os';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,6 +16,7 @@ const io = new Server(httpServer, {
 });
 
 const PORT = Number(process.env.PORT) || 4000;
+const DOMAIN = process.env.DOMAIN; // e.g. "https://workshop.yourdomain.com"
 
 function getLocalIp(): string {
   const nets = os.networkInterfaces();
@@ -33,7 +35,20 @@ function getLocalIp(): string {
 
 const localIp = getLocalIp();
 
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve the audience companion app at /app or /join
+app.use('/app', express.static(path.join(__dirname, 'public')));
+app.get('/join', (_req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// If built slides exist in dist/, serve them at the root
+const distPath = path.join(__dirname, 'dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+} else {
+  // If not built yet, fallback to serving public on root
+  app.use(express.static(path.join(__dirname, 'public')));
+}
 
 interface AccuracyMap {
   accurate: number;
@@ -66,7 +81,6 @@ interface WorkshopState {
   finalReflections: Array<{ id: number; text: string }>;
 }
 
-// Track real connected audience sockets by unique client ID
 const audienceSockets = new Set<string>();
 
 const state: WorkshopState = {
@@ -305,7 +319,7 @@ const translations: Record<string, Record<number, SlideTranslation>> = {
     12: {
       title: "Umgebungs- und Reizarchitektur",
       subtitle: "Reibung etablieren statt rein auf Willenskraft zu setzen.",
-      prompt1: "Niedrigschwellige Maßnahmen (z. B. Graustufen, räumliche Trennung, Benachrichtigungen stummschalten)"
+      prompt: "Niedrigschwellige Maßnahmen (z. B. Graustufen, räumliche Trennung, Benachrichtigungen stummschalten)"
     },
     13: {
       title: "Wahl des 7-Tage-Versuchs",
@@ -639,11 +653,24 @@ io.on('connection', (socket: Socket) => {
   });
 });
 
-app.get('/api/info', (_req: Request, res: Response) => {
+app.get('/api/info', (req: Request, res: Response) => {
+  // If hosted behind a domain, respect DOMAIN env var or Host header
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  const hostHeader = req.headers['host'];
+  
+  let targetUrl: string;
+  if (DOMAIN) {
+    targetUrl = DOMAIN.endsWith('/') ? `${DOMAIN}join` : `${DOMAIN}/join`;
+  } else if (hostHeader && !hostHeader.includes('localhost') && !hostHeader.includes('127.0.0.1')) {
+    targetUrl = `${protocol}://${hostHeader}/join`;
+  } else {
+    targetUrl = `http://${localIp}:${PORT}/join`;
+  }
+
   res.json({
     localIp,
     port: PORT,
-    audienceUrl: `http://${localIp}:${PORT}`
+    audienceUrl: targetUrl
   });
 });
 
@@ -651,4 +678,5 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`Live Interaction Socket Server running on:`);
   console.log(` - Local:    http://localhost:${PORT}`);
   console.log(` - Network:  http://${localIp}:${PORT}`);
+  if (DOMAIN) console.log(` - Domain:   ${DOMAIN}`);
 });

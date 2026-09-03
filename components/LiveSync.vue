@@ -45,8 +45,13 @@ const liveState = ref<LiveState>({
 
 onMounted(async () => {
   const host = window.location.hostname || 'localhost'
+  const isCustomDomain = host !== 'localhost' && host !== '127.0.0.1' && !host.startsWith('192.168.') && !host.startsWith('10.')
+  const serverBase = isCustomDomain 
+    ? window.location.origin
+    : `http://${host}:4000`
+
   try {
-    const res = await fetch(`http://${host}:4000/api/info`)
+    const res = await fetch(`${serverBase}/api/info`)
     const data = await res.json()
     audienceUrl.value = data.audienceUrl
     qrDataUrl.value = await QRCode.toDataURL(data.audienceUrl, {
@@ -58,13 +63,12 @@ onMounted(async () => {
       }
     })
   } catch (e) {
-    audienceUrl.value = `http://${host}:4000`
+    audienceUrl.value = `${serverBase}/join`
     qrDataUrl.value = await QRCode.toDataURL(audienceUrl.value, { width: 260, margin: 2 })
   }
 
-  const socketUrl = `http://${host}:4000`
-  // Presenter socket does not have role=audience, so count reflects real mobile audience devices
-  socket.value = io(socketUrl, {
+  // Connect socket
+  socket.value = io(serverBase, {
     query: { role: 'presenter' }
   })
 
@@ -147,7 +151,7 @@ function sumVotes(dict: Record<string, number> | undefined): number {
         <h3 class="text-xl font-bold text-white tracking-tight">Connect via Mobile Device</h3>
         <p class="text-xs text-slate-300">Scan the QR code or enter the URL in any mobile browser:</p>
         <div class="inline-block font-mono text-sm text-indigo-300 font-bold bg-black/60 px-3 py-1.5 rounded border border-white/15">
-          {{ audienceUrl || 'http://localhost:4000' }}
+          {{ audienceUrl || 'http://localhost:4000/join' }}
         </div>
         <div class="text-xs text-slate-400 pt-1 flex items-center gap-3 font-mono">
           <span>Connected Participants: <b class="text-white">{{ participantCount }}</b></span>
