@@ -7,14 +7,14 @@ An interactive workshop presentation built on [Slidev](https://sli.dev/) and Nod
 - **Real-time synchronized mobile web app** with instant live translation in 4 languages (**English, German, Spanish, French**).
 - **Live interactive socket widgets**: screen time estimates, room histogram, open word cloud for reclaimed time, habit triggers, phone friction ideation wall, 7-day experiment picker, and Gollwitzer IF-THEN implementation intention rules.
 
-## Quick Start
+## Quick Start (with pnpm)
 
 ```bash
 # 1. Install dependencies
-npm install
+pnpm install
 
 # 2. Run both the Slidev deck & Socket Server concurrently
-npm start
+pnpm start
 ```
 
 - **Slidev Presentation Deck**: [http://localhost:3030](http://localhost:3030)
