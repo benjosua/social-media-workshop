@@ -66,12 +66,22 @@ interface WorkshopState {
   finalReflections: Array<{ id: number; text: string }>;
 }
 
+// Track real connected audience sockets by unique client ID
+const audienceSockets = new Set<string>();
+
 const state: WorkshopState = {
   currentSlide: 1,
   totalSlides: 15,
   participants: 0,
   prediction: {
-    appVotes: {},
+    appVotes: {
+      'Instagram': 0,
+      'TikTok': 0,
+      'YouTube': 0,
+      'X / Twitter': 0,
+      'Reddit': 0,
+      'Snapchat': 0
+    },
     accuracy: {
       accurate: 0,
       under1h: 0,
@@ -81,11 +91,11 @@ const state: WorkshopState = {
   },
   screenTimePoll: {
     '<2 h': 0,
-    '2–3 h': 0,
-    '3–4 h': 0,
-    '4–5 h': 0,
-    '5–6 h': 0,
-    '6–8 h': 0,
+    '2-3 h': 0,
+    '3-4 h': 0,
+    '4-5 h': 0,
+    '5-6 h': 0,
+    '6-8 h': 0,
     '8 h+': 0
   },
   timeWorth: [],
@@ -94,50 +104,50 @@ const state: WorkshopState = {
       'IQ': 0,
       'Attention': 0,
       'Sleep': 0,
-      'Anxiety/depression': 0,
-      'Academic performance': 0,
-      'Nothing meaningful': 0
+      'Anxiety / Depression': 0,
+      'Academic Performance': 0,
+      'Nothing Meaningful': 0
     },
     studyType: {
-      'One large survey': 0,
-      'Longitudinal study': 0,
-      'Randomized experiment': 0,
-      'Meta-analysis': 0
+      'One Large Survey': 0,
+      'Longitudinal Study': 0,
+      'Randomized Experiment (RCT)': 0,
+      'Meta-Analysis': 0
     }
   },
   timeGoPoll: {
-    'Another screen': 0,
+    'Another Screen': 0,
     'Studying': 0,
     'Exercise': 0,
-    'Face-to-face socializing': 0,
+    'Face-to-Face Socializing': 0,
     'Sleep': 0,
     'Outdoors': 0,
     'Nothing': 0
   },
   triggers: {
-    'immediately after waking': 0,
-    'before sleep': 0,
-    'while studying': 0,
-    'when bored': 0,
-    'when stressed': 0,
-    'after a notification': 0,
-    'while waiting': 0,
-    'without really deciding': 0
+    'Immediately after waking': 0,
+    'Before sleep': 0,
+    'While studying / working': 0,
+    'When bored': 0,
+    'When stressed': 0,
+    'After a notification': 0,
+    'While waiting in queue': 0,
+    'Without conscious decision': 0
   },
   phoneIdeas: [],
   experimentLevel: {
-    'Level 1: Reduce (≤60m/no short form)': 0,
-    'Level 2: Remove (delete apps, desktop only)': 0,
-    'Level 3: Quit (no social 7 days)': 0
+    'Level 1: Reduce (under 60 min/day, no short-form)': 0,
+    'Level 2: Remove (apps deleted, desktop browser only)': 0,
+    'Level 3: Full Pause (7 days total social pause)': 0
   },
   experimentOutcome: {
-    'better sleep': 0,
-    'better concentration': 0,
-    'better mood': 0,
-    'more boredom': 0,
-    'more time': 0,
-    'no difference': 0,
-    'harder than expected': 0
+    'Better sleep': 0,
+    'Better concentration': 0,
+    'Better mood': 0,
+    'More initial boredom': 0,
+    'More discretionary time': 0,
+    'No noticeable difference': 0,
+    'Harder than anticipated': 0
   },
   ifThenList: [],
   finalReflections: []
@@ -157,331 +167,343 @@ const translations: Record<string, Record<number, SlideTranslation>> = {
   en: {
     1: {
       title: "What Is Social Media Costing You?",
-      subtitle: "Attention, time, sleep, mood — and what the evidence actually says",
-      quote: "“I’m not going to tell you social media is bad. I want you to investigate your own use first.”"
+      subtitle: "Attention, time, sleep, mood - and what the evidence actually says",
+      quote: "\"I am not going to tell you social media is bad. I want you to investigate your own use first.\""
     },
     2: {
       title: "Predict Your Screen Time",
-      subtitle: "Don't check your settings yet! Estimate first.",
-      prompt1: "Which app do you think took the most time yesterday?",
-      prompt2: "How accurate were you compared to actual Digital Wellbeing / Screen Time?"
+      subtitle: "Do not inspect system settings yet. Estimate first.",
+      prompt1: "Which application accounted for the most screen time yesterday?",
+      prompt2: "How accurate was your estimate compared to recorded device metrics?"
     },
     3: {
-      title: "Room Screen-Time Poll",
-      subtitle: "Anonymous room overview",
-      prompt: "Yesterday, my total screen time was..."
+      title: "Room Screen-Time Survey",
+      subtitle: "Aggregated session data",
+      prompt: "Yesterday, my total active screen time was:"
     },
     4: {
       title: "What Is That Time Worth?",
       subtitle: "3 h/day = 1,095 h/year | 5 h/day = 1,825 h/year",
-      prompt: "If you could get 30 minutes of yesterday back, what would you actually do with it?"
+      prompt: "If you reclaimed 30 minutes from yesterday, what would you allocate it toward?"
     },
     5: {
-      title: "Before We Look at the Research",
-      subtitle: "Prediction & Causality",
-      prompt1: "What do you think heavy social media / short-form video is most strongly related to?",
-      prompt2: "Which scientific evidence would convince you most?"
+      title: "Prior Hypotheses & Evidence Standards",
+      subtitle: "Pre-registration of priors and causal standards",
+      prompt1: "Which domain do you hypothesize short-form media correlates with most strongly?",
+      prompt2: "Which methodological standard provides the most compelling causal evidence?"
     },
     6: {
-      title: "The Most Striking Cognition Study",
-      subtitle: "Nguyen et al., 2025 (Psychological Bulletin - 71 studies, 98,299 participants)",
-      takeaway: "The strongest signal is not 'lower IQ'. It is attention and inhibitory control (ability to resist distraction)."
+      title: "Cognitive Control & Attention Findings",
+      subtitle: "Nguyen et al., 2025 (Psychological Bulletin - 71 studies, 98,299 subjects)",
+      takeaway: "The primary signal is not generalized cognitive decline, but selective deficits in attention and inhibitory control."
     },
     7: {
-      title: "Mental Health and Sleep",
-      subtitle: "Ahmed et al., 2024 (1.1M people) & Du et al., 2024 & Sleep Umbrella 2025",
-      takeaway: "Problematic/compulsive use appears more important than raw 'screen time' alone."
+      title: "Mental Health & Sleep Disruption",
+      subtitle: "Ahmed et al., 2024 (1.1M subjects), Du et al., 2024, Sleep Umbrella 2025",
+      takeaway: "Problematic and compulsive usage patterns demonstrate stronger associations than raw screen hours."
     },
     8: {
-      title: "Does Using Less Actually Help?",
+      title: "Causal Effects of Use Reduction",
       subtitle: "Castelo et al., 2025 RCT & May et al., 2025 Meta-analysis",
-      takeaway: "Randomized trials show 2-week restriction boosts sustained attention & mental health. 91% improved on ≥1 outcome."
+      takeaway: "Two-week mobile internet restriction demonstrated improvements in sustained attention and wellbeing. 91% improved on at least one parameter."
     },
     9: {
-      title: "Where Did the Time Go?",
-      subtitle: "Opportunity cost revealed by randomized trial",
-      prompt: "When mobile internet disappears, where does the reclaimed time go?"
+      title: "Resource Reallocation",
+      subtitle: "Empirical opportunity cost observed in experimental restriction",
+      prompt: "When smartphone mobile access is removed, how is reclaimed time distributed?"
     },
     10: {
-      title: "What the Evidence Does NOT Show",
-      subtitle: "Debunking exaggerated claims",
-      takeaway: "No proof of IQ drop (Sauce '22), no structural brain damage (Nivins '24), complete abstinence doesn't magically solve all affect (Lemahieu '25)."
+      title: "Claims Not Supported by the Evidence",
+      subtitle: "Methodological critique of unsupported claims",
+      takeaway: "No verified reduction in intelligence (Sauce '22), no structural neural atrophy (Nivins '24), and total abstinence is not an unconditional remedy (Lemahieu '25)."
     },
     11: {
-      title: "Why Do You Open It?",
-      subtitle: "Cue → Action → Immediate reward → Repeat",
-      prompt: "When do you most automatically reach for social media?"
+      title: "Behavioral Mechanisms & Habit Loops",
+      subtitle: "Cue -> Routine -> Reinforcement -> Automaticity",
+      prompt: "Identify your most frequent trigger for automatic device pickup:"
     },
     12: {
-      title: "Design a Better Phone (90s Challenge)",
-      subtitle: "Keep the benefits. Remove automatic habit traps without relying on willpower alone.",
-      prompt: "Submit friction tricks (grayscale, notifications off, out of bedroom, app limits, etc.)"
+      title: "Environmental Architecture Challenge",
+      subtitle: "Establish low-friction constraints without relying solely on effortful self-control.",
+      prompt: "Propose actionable environmental constraints (e.g. grayscale display, physical device segregation, notifications disabled)."
     },
     13: {
-      title: "Choose a 7-Day Experiment",
-      subtitle: "A temporary test, not a lifetime vow.",
-      prompt1: "Pick your challenge level",
-      prompt2: "Predict what will happen"
+      title: "Select a 7-Day Protocol",
+      subtitle: "Empirical personal trial over seven days.",
+      prompt1: "Protocol Tier",
+      prompt2: "Hypothesized Primary Outcome"
     },
     14: {
-      title: "Make It Specific (Implementation Intention)",
-      subtitle: "IF [trigger occurs] THEN I will [specific action]",
-      prompt: "Write your IF-THEN commitment rule for the next 7 days."
+      title: "Implementation Intentions",
+      subtitle: "IF [situational trigger], THEN [pre-committed behavior]",
+      prompt: "Define your conditional implementation commitment for the next seven days."
     },
     15: {
-      title: "Final Takeaway",
-      subtitle: "Use much less for seven days. Track what changes. Decide afterward.",
-      takeaway: "More is not necessarily better. Strongest evidence points to attention, sleep, and problematic habits."
+      title: "Synthesis & Conclusion",
+      subtitle: "Reduce volume for seven days. Record observational data. Evaluate objectively.",
+      takeaway: "Current empirical data supports focusing on attention, sleep hygiene, and intentional friction."
     }
   },
   de: {
     1: {
       title: "Was kostet dich Social Media?",
-      subtitle: "Aufmerksamkeit, Zeit, Schlaf, Stimmung – und was die Wissenschaft wirklich sagt",
-      quote: "„Ich werde euch nicht sagen, dass Social Media böse ist. Untersucht zuerst euer eigenes Verhalten.“"
+      subtitle: "Aufmerksamkeit, Zeit, Schlaf, Stimmung - und was die Wissenschaft belegt",
+      quote: "\"Ich werde Ihnen nicht sagen, dass Social Media schädlich ist. Untersuchen Sie zuerst Ihr eigenes Nutzungsverhalten.\""
     },
     2: {
-      title: "Schätze deine Bildschirmzeit",
-      subtitle: "Noch nicht in den Einstellungen nachsehen! Erst schätzen.",
-      prompt1: "Welche App hat gestern die meiste Zeit gefressen?",
-      prompt2: "Wie genau lagst du im Vergleich zu deiner echten Bildschirmzeit?"
+      title: "Bildschirmzeit einschaetzen",
+      subtitle: "Vor der Überprüfung der Systemeinstellungen: Schätzen Sie zuerst.",
+      prompt1: "Welche Anwendung hat gestern die meiste Zeit beansprucht?",
+      prompt2: "Wie präzise war Ihre Schätzung im Vergleich zu den tatsächlichen Messwerten?"
     },
     3: {
-      title: "Bildschirmzeit-Umfrage im Raum",
-      subtitle: "Anonymes Stimmungsbild",
-      prompt: "Gestern war meine gesamte Bildschirmzeit..."
+      title: "Bildschirmzeit-Erhebung",
+      subtitle: "Aggregierte Raumdaten",
+      prompt: "Gestern betrug meine gesamte Bildschirmzeit:"
     },
     4: {
-      title: "Was ist diese Zeit wert?",
+      title: "Der Wert verfügbarer Zeit",
       subtitle: "3 Std./Tag = 1.095 Std./Jahr | 5 Std./Tag = 1.825 Std./Jahr",
-      prompt: "Wenn du 30 Minuten von gestern zurückbekämst: Was würdest du wirklich tun?"
+      prompt: "Wenn Sie 30 Minuten von gestern zurückerhielten: Wofür würden Sie diese Zeit einsetzen?"
     },
     5: {
-      title: "Bevor wir auf die Studien schauen",
-      subtitle: "Vorhersage & Kausalität",
-      prompt1: "Womit hängt starker Short-Form-Konsum deiner Meinung nach am stärksten zusammen?",
-      prompt2: "Welche Evidenz würde dich am meisten überzeugen?"
+      title: "Vorab-Hypothesen & Kausalstandards",
+      subtitle: "Vorhersage von Korrelation und Evidenzgewicht",
+      prompt1: "Mit welchem Bereich korreliert hoher Konsum von Kurzvideos Ihrer Ansicht nach am stärksten?",
+      prompt2: "Welches Studiendesign liefert für Sie die stärkste Evidenz?"
     },
     6: {
-      title: "Die auffälligste Kognitionsstudie",
-      subtitle: "Nguyen et al., 2025 (Psychological Bulletin – 71 Studien, 98.299 Teilnehmer)",
-      takeaway: "Das stärkste Signal ist kein 'niedrigerer IQ', sondern Impulskontrolle & Aufmerksamkeitsfokus."
+      title: "Kognitive Kontrolle & Aufmerksamkeitsfokus",
+      subtitle: "Nguyen et al., 2025 (Psychological Bulletin - 71 Studien, 98.299 Probanden)",
+      takeaway: "Der stärkste Effekt zeigt sich nicht bei allgemeiner Intelligenz, sondern spezifisch bei Impulskontrolle und Aufmerksamkeit."
     },
     7: {
-      title: "Psyche & Schlaf",
-      subtitle: "Ahmed et al., 2024 (1,1 Mio. Probanden), Du et al., 2024, Schlaf-Review 2025",
-      takeaway: "Problematische/kompulsive Nutzung ist viel entscheidender als die reine Stundenzahl."
+      title: "Psychische Gesundheit & Schlafarchitektur",
+      subtitle: "Ahmed et al., 2024 (1,1 Mio. Teilnehmende), Du et al., 2024",
+      takeaway: "Problematische, zwanghafte Nutzung wiegt deutlich schwerer als die reine passive Bildschirmdauer."
     },
     8: {
-      title: "Hilft weniger nutzen wirklich?",
+      title: "Kausale Effekte gezielter Reduktion",
       subtitle: "Castelo et al., 2025 RCT & May et al., 2025 Meta-Analyse",
-      takeaway: "2 Wochen Smartphone-Internetpause steigern Fokus & Wohlbefinden. 91% verbesserten sich messbar."
+      takeaway: "Zweiwöchige Beschränkung steigerte anhaltende Aufmerksamkeit und subjektives Befinden. 91% zeigten messbare Verbesserungen."
     },
     9: {
-      title: "Wohin geht die gewonnene Zeit?",
-      subtitle: "Opportunitätskosten im RCT-Experiment",
-      prompt: "Wenn mobiles Internet blockiert wird: Wo landet die Zeit?"
+      title: "Zeitliche Reallokation",
+      subtitle: "Im Experiment beobachtete Opportunitätskosten",
+      prompt: "Wohin verlagert sich die Zeit, wenn mobiler Netzzugang entfällt?"
     },
     10: {
-      title: "Was die Daten NICHT zeigen",
-      subtitle: "Widerlegung von Mythen",
-      takeaway: "Kein IQ-Verlust (Sauce '22), keine Gehirnschäden (Nivins '24), vollständiger Verzicht macht nicht automatisch glücklicher (Lemahieu '25)."
+      title: "Nicht durch Evidenz gestützte Thesen",
+      subtitle: "Wissenschaftliche Einordnung überzogener Narrative",
+      takeaway: "Kein belegter IQ-Abfall (Sauce '22), keine strukturellen Hirnschäden (Nivins '24), und vollkommene Abstinenz garantiert kein universelles Wohlbefinden."
     },
     11: {
-      title: "Warum öffnest du es?",
-      subtitle: "Auslöser → Handlung → Sofortige Belohnung → Wiederholung",
-      prompt: "In welchem Moment greifst du am automatisiertesten zum Smartphone?"
+      title: "Verhaltensmuster & Auslöser",
+      subtitle: "Reiz -> Handlung -> Belohnung -> Automatisierung",
+      prompt: "In welcher Situation greifen Sie am automatisiertesten zum Gerät?"
     },
     12: {
-      title: "Baue ein besseres Smartphone (90-Sekunden)",
-      subtitle: "Vorteile behalten, Reizüberflutung eliminieren – ohne Willenskraft zu strapazieren.",
-      prompt: "Welche Reibungspunkte helfen dir? (Graustufen, Benachrichtigungen aus, etc.)"
+      title: "Umgebungs- und Reizarchitektur",
+      subtitle: "Reibung etablieren statt rein auf Willenskraft zu setzen.",
+      prompt1: "Niedrigschwellige Maßnahmen (z. B. Graustufen, räumliche Trennung, Benachrichtigungen stummschalten)"
     },
     13: {
-      title: "Wähle dein 7-Tage-Experiment",
-      subtitle: "Ein Experiment, kein lebenslanger Schwur.",
-      prompt1: "Wähle dein Challenge-Level",
-      prompt2: "Was wird voraussichtlich passieren?"
+      title: "Wahl des 7-Tage-Versuchs",
+      subtitle: "Gezieltes Experiment über sieben Tage.",
+      prompt1: "Versuchsstufe",
+      prompt2: "Erwartete Wirkung"
     },
     14: {
-      title: "Mach es konkret: Wenn-Dann-Plan",
-      subtitle: "WENN [Auslöser] DANN werde ich [konkrete Aktion]",
-      prompt: "Trage deine Umsetzungsintention für die nächste Woche ein."
+      title: "Konkrete Umsetzungsintention",
+      subtitle: "WENN [Auslösesituation], DANN [vorab festgelegte Handlung]",
+      prompt: "Definieren Sie Ihre Wenn-Dann-Regel für die kommenden sieben Tage."
     },
     15: {
-      title: "Fazit & Ausblick",
-      subtitle: "7 Tage deutlich reduzieren. Beobachten. Danach bewusst entscheiden.",
-      takeaway: "Mehr ist nicht besser. Der Hebel liegt bei Aufmerksamkeit, Schlaf & intentionaler Nutzung."
+      title: "Zusammenfassung & Auswertung",
+      subtitle: "Sieben Tage signifikant reduzieren. Veränderungen dokumentieren. Anschließend bewerten.",
+      takeaway: "Die wissenschaftliche Datenlage empfiehlt bewussten Umgang, Schlaffokus und strukturelle Reibung."
     }
   },
   es: {
     1: {
-      title: "¿Qué te están costando las redes sociales?",
-      subtitle: "Atención, tiempo, sueño, estado de ánimo: lo que dice la evidencia real",
-      quote: "“No voy a decirte que las redes son malas. Quiero que investigues tu propio uso primero.”"
+      title: "¿Qué te cuesta el uso de redes sociales?",
+      subtitle: "Atención, tiempo, descanso, ánimo - lo que la evidencia constata",
+      quote: "\"No voy a decirte que las redes son perjudiciales. Te invito a analizar primero tus propios patrones.\""
     },
     2: {
-      title: "Predice tu tiempo en pantalla",
-      subtitle: "No mires los ajustes todavía. Estima primero.",
-      prompt1: "¿Qué aplicación crees que te quitó más tiempo ayer?",
-      prompt2: "¿Qué tan acertada fue tu estimación?"
+      title: "Estima tu tiempo de pantalla",
+      subtitle: "No consultes las métricas del sistema todavía. Estima primero.",
+      prompt1: "¿Qué aplicación consumió mayor tiempo ayer?",
+      prompt2: "¿Qué tan precisa resultó tu estimación frente al registro real?"
     },
     3: {
-      title: "Encuesta de la sala: Tiempo en pantalla",
-      subtitle: "Muestra anónima en tiempo real",
-      prompt: "Ayer mi tiempo total de pantalla fue..."
+      title: "Sondeo de tiempo en pantalla",
+      subtitle: "Datos agregados de la sesión",
+      prompt: "Ayer mi tiempo de pantalla registrado fue:"
     },
     4: {
-      title: "¿Cuánto vale ese tiempo?",
+      title: "El valor del tiempo disponible",
       subtitle: "3 h/día = 1.095 h/año | 5 h/día = 1.825 h/año",
-      prompt: "Si pudieras recuperar 30 minutos de ayer, ¿qué harías con ellos?"
+      prompt: "Si recuperaras 30 minutos de ayer, ¿a qué actividad los destinarías?"
     },
     5: {
-      title: "Antes de ver los estudios",
-      subtitle: "Predicción y Causalidad",
-      prompt1: "¿Con qué se relaciona más fuertemente el consumo masivo de videos cortos?",
-      prompt2: "¿Qué tipo de estudio te convencería más?"
+      title: "Hipótesis previas y rigor metodológico",
+      subtitle: "Causalidad frente a correlación",
+      prompt1: "¿Con qué variable consideras más asociada la exposición a videos cortos?",
+      prompt2: "¿Qué diseño metodológico consideras más determinante?"
     },
     6: {
-      title: "El estudio de cognición más llamativo",
+      title: "Control cognitivo y capacidad de atención",
       subtitle: "Nguyen et al., 2025 (Psychological Bulletin - 71 estudios, 98.299 participantes)",
-      takeaway: "La señal principal no es 'menor CI', sino déficit en atención y control inhibitorio."
+      takeaway: "El hallazgo principal no radica en un descenso del CI, sino en el control inhibitorio y la atención sostenida."
     },
     7: {
-      title: "Salud mental y sueño",
-      subtitle: "Ahmed et al., 2024 (1,1M personas) y Du et al., 2024",
-      takeaway: "El uso problemático y compulsivo pesa más que el tiempo bruto de pantalla."
+      title: "Salud mental y calidad del descanso",
+      subtitle: "Ahmed et al., 2024 (1,1M participantes), Du et al., 2024",
+      takeaway: "El uso problemático y compulsivo guarda una relación significativamente mayor que las horas totales de pantalla."
     },
     8: {
-      title: "¿Realmente ayuda reducir el uso?",
-      subtitle: "Castelo et al., 2025 ensayo aleatorizado (RCT)",
-      takeaway: "2 semanas sin internet móvil mejoraron atención y bienestar. 91% mejoró en al menos una variable."
+      title: "Evidencia causal de la reducción de uso",
+      subtitle: "Castelo et al., 2025 RCT y May et al., 2025 Metaanálisis",
+      takeaway: "Dos semanas sin internet móvil incrementaron atención y bienestar. 91% mejoró en al menos un indicador."
     },
     9: {
-      title: "¿A dónde se fue ese tiempo?",
-      subtitle: "Costo de oportunidad revelado",
-      prompt: "Si desaparece el internet móvil del teléfono, ¿a dónde va el tiempo?"
+      title: "Redistribución del tiempo",
+      subtitle: "Costo de oportunidad documentado experimentalmente",
+      prompt: "Al restringir la conectividad móvil, ¿a dónde se reasignan las horas?"
     },
     10: {
-      title: "Lo que la evidencia NO demuestra",
-      subtitle: "Desmontando mitos alarmistas",
-      takeaway: "No hay prueba de caída de CI ni de daño cerebral estructural. La abstinencia total tampoco es mágica."
+      title: "Afirmaciones no respaldadas por la evidencia",
+      subtitle: "Revisión crítica de afirmaciones alarmistas",
+      takeaway: "Sin caída demostrada del CI (Sauce '22), sin daño tisular cerebral (Nivins '24), y la abstinencia total no garantiza bienestar permanente."
     },
     11: {
-      title: "¿Por qué abres la app?",
-      subtitle: "Señal → Acción → Recompensa inmediata → Repetición",
-      prompt: "¿En qué momento tomas tu teléfono de forma más automática?"
+      title: "Mecanismos conductuales y disparadores",
+      subtitle: "Señal -> Rutina -> Refuerzo -> Hábito",
+      prompt: "¿Cuál es tu disparador principal para desbloquear el dispositivo de forma automática?"
     },
     12: {
-      title: "Diseña un teléfono mejor (Reto 90 seg)",
-      subtitle: "Mantén los beneficios. Reduce el hábito automático sin depender de fuerza de voluntad.",
-      prompt: "Comparte tácticas de fricción (pantalla en blanco y negro, sin notificaciones, fuera de la habitación)"
+      title: "Diseño del entorno y barreras de fricción",
+      subtitle: "Establece barreras ambientales en lugar de depender únicamente de la fuerza de voluntad.",
+      prompt: "Tácticas de fricción (escala de grises, dispositivo fuera del dormitorio, notificaciones silenciadas)"
     },
     13: {
-      title: "Elige un experimento de 7 días",
-      subtitle: "Una prueba temporal, no un voto de por vida.",
-      prompt1: "Nivel de desafío",
-      prompt2: "¿Qué predices que pasará?"
+      title: "Protocolo experimental de 7 días",
+      subtitle: "Intervención temporal evaluable.",
+      prompt1: "Nivel de intervención",
+      prompt2: "Efecto esperado"
     },
     14: {
-      title: "Hazlo específico (Intención de implementación)",
-      subtitle: "SI ocurre [disparador], ENTONCES haré [acción]",
-      prompt: "Escribe tu regla Si-Entonces para los próximos 7 días."
+      title: "Intención de implementación estructurada",
+      subtitle: "SI [situación detonante], ENTONCES [acción predefinida]",
+      prompt: "Redacta tu compromiso condicional para los próximos 7 días."
     },
     15: {
-      title: "Conclusión final",
-      subtitle: "Usa mucho menos durante 7 días. Registra qué cambia. Decide después.",
-      takeaway: "Más no es mejor. La evidencia apunta a atención, sueño y uso intencional."
+      title: "Conclusión y evaluación",
+      subtitle: "Reduce el uso durante 7 días. Registra los cambios. Evalúa después.",
+      takeaway: "La evidencia analizada respalda la preservación del descanso, el foco atencional y el uso deliberado."
     }
   },
   fr: {
     1: {
-      title: "Que vous coûtent les réseaux sociaux ?",
-      subtitle: "Attention, temps, sommeil, humeur — et ce que disent réellement les études",
-      quote: "« Je ne vais pas vous dire que les réseaux sont mauvais. Je veux d'abord que vous exploriez vos propres habitudes. »"
+      title: "Que vous coûte l'usage des réseaux sociaux ?",
+      subtitle: "Attention, temps, sommeil, humeur - l'état des connaissances scientifiques",
+      quote: "\"Je ne prétends pas que les réseaux sociaux sont néfastes par nature. Analysons d'abord vos propres usages.\""
     },
     2: {
-      title: "Prédisez votre temps d'écran",
-      subtitle: "Ne regardez pas encore vos réglages ! Estimez d'abord.",
-      prompt1: "Quelle application vous a pris le plus de temps hier ?",
-      prompt2: "À quel point votre estimation était-elle exacte ?"
+      title: "Estimation du temps d'écran",
+      subtitle: "Avant de consulter les statistiques d'utilisation, évaluez d'abord votre temps.",
+      prompt1: "Quelle application a monopolisé le plus de temps hier ?",
+      prompt2: "Quel était le degré de précision de votre estimation ?"
     },
     3: {
-      title: "Sondage de la salle : Temps d'écran",
-      subtitle: "Sondage anonyme en direct",
-      prompt: "Hier, mon temps d'écran total était de..."
+      title: "Relevé collectif du temps d'écran",
+      subtitle: "Données agrégées de la session",
+      prompt: "Hier, mon temps d'écran total s'élevait à :"
     },
     4: {
-      title: "Que vaut ce temps ?",
-      subtitle: "3h/jour = 1 095h/an | 5h/jour = 1 825h/an",
-      prompt: "Si vous pouviez récupérer 30 minutes d'hier, que feriez-vous concrètement ?"
+      title: "La valeur du temps disponible",
+      subtitle: "3 h/jour = 1 095 h/an | 5 h/jour = 1 825 h/an",
+      prompt: "Si vous récupériez 30 minutes d'hier, à quoi les consacreriez-vous ?"
     },
     5: {
-      title: "Avant de regarder la recherche",
-      subtitle: "Prédiction & Causalité",
-      prompt1: "À quoi les vidéos courtes sont-elles le plus fortement corrélées selon vous ?",
-      prompt2: "Quel type de preuve vous convaincrait le plus ?"
+      title: "Hypothèses préalables et normes causales",
+      subtitle: "Prédiction des corrélations et degré de preuve",
+      prompt1: "À quel domaine associez-vous le plus fortement la consommation de formats courts ?",
+      prompt2: "Quel type d'étude méthodologique jugez-vous le plus probant ?"
     },
     6: {
-      title: "L'étude cognitive la plus frappante",
-      subtitle: "Nguyen et al., 2025 (Psychological Bulletin – 71 études, 98 299 participants)",
-      takeaway: "Le signal le plus fort n'est pas une 'baisse de QI', mais le contrôle inhibiteur et l'attention."
+      title: "Contrôle inhibiteur et attention",
+      subtitle: "Nguyen et al., 2025 (Psychological Bulletin - 71 études, 98 299 participants)",
+      takeaway: "Le signal dominant ne concerne pas le quotient intellectuel, mais le contrôle inhibiteur et le maintien de l'attention."
     },
     7: {
-      title: "Santé mentale et sommeil",
-      subtitle: "Ahmed et al., 2024 (1,1M personnes) & Du et al., 2024",
-      takeaway: "L'usage compulsif/problématique importe bien plus que le simple temps d'écran brut."
+      title: "Santé mentale et altération du sommeil",
+      subtitle: "Ahmed et al., 2024 (1,1 million d'individus), Du et al., 2024",
+      takeaway: "L'usage problématique et compulsif pèse plus lourdement que le simple volume d'écran passif."
     },
     8: {
-      title: "Réduire aide-t-il vraiment ?",
-      subtitle: "Castelo et al., 2025 essai contrôlé randomisé (RCT)",
-      takeaway: "2 semaines sans internet mobile améliorent l'attention et le bien-être. 91% d'amélioration."
+      title: "Effets causaux de la réduction d'usage",
+      subtitle: "Castelo et al., 2025 (essai contrôlé randomisé) et May et al., 2025",
+      takeaway: "Deux semaines de restriction de données mobiles ont amélioré l'attention et le bien-être. 91% d'amélioration mesurée sur au moins un critère."
     },
     9: {
-      title: "Où est passé le temps ?",
-      subtitle: "Le coût d'opportunité révélé",
-      prompt: "Quand internet mobile disparaît du smartphone, où va le temps retrouvé ?"
+      title: "Réallocation du temps",
+      subtitle: "Coût d'opportunité observé empiriquement",
+      prompt: "En l'absence de connectivité mobile sur le smartphone, où s'oriente le temps retrouvé ?"
     },
     10: {
-      title: "Ce que la science NE montre PAS",
-      subtitle: "Démystifier les affirmations exagérées",
-      takeaway: "Aucune baisse de QI prouvée (Sauce '22), pas de lésion cérébrale (Nivins '24), l'abstinence totale n'est pas une solution miracle."
+      title: "Ce que la littérature scientifique ne valide pas",
+      subtitle: "Analyse critique des allégations disproportionnées",
+      takeaway: "Aucune baisse de QI démontrée (Sauce '22), aucune lésion neuronale structurelle (Nivins '24), et l'abstinence totale ne constitue pas une solution absolue."
     },
     11: {
-      title: "Pourquoi ouvrez-vous votre téléphone ?",
-      subtitle: "Déclencheur → Action → Récompense immédiate → Répétition",
-      prompt: "À quel moment déverrouillez-vous votre téléphone de manière la plus automatique ?"
+      title: "Boucles comportementales et déclencheurs",
+      subtitle: "Signal -> Action -> Renforcement -> Automatisme",
+      prompt: "Identifiez votre déclencheur le plus fréquent de déverrouillage automatique :"
     },
     12: {
-      title: "Concevez un meilleur smartphone (Défi 90s)",
-      subtitle: "Gardez les bénéfices, coupez les pièges sans dépendre de la seule volonté.",
-      prompt: "Partagez vos astuces (mode noir et blanc, couper les notifications, hors de la chambre)"
+      title: "Architecture de l'environnement matériel",
+      subtitle: "Mettre en place des barrières de friction plutôt que dépendre uniquement de la volonté.",
+      prompt: "Interventions structurelles (nuances de gris, smartphone hors de la chambre, alertes désactivées)"
     },
     13: {
-      title: "Choisissez votre test de 7 jours",
-      subtitle: "Une expérience temporaire, pas une promesse à vie.",
-      prompt1: "Niveau de défi",
-      prompt2: "Que prédisez-vous ?"
+      title: "Sélection d'un protocole sur 7 jours",
+      subtitle: "Expérimentation individuelle structurée.",
+      prompt1: "Niveau d'engagement",
+      prompt2: "Effet anticipé"
     },
     14: {
-      title: "Formulez votre intention (SI... ALORS...)",
-      subtitle: "SI [déclencheur], ALORS je vais [action précise]",
-      prompt: "Rédigez votre engagement pour les 7 prochains jours."
+      title: "Formulation d'intentions de mise en oeuvre",
+      subtitle: "SI [déclencheur précis], ALORS [réponse préétablie]",
+      prompt: "Rédigez votre engagement conditionnel pour les sept prochains jours."
     },
     15: {
-      title: "Message final",
-      subtitle: "Réduisez drastiquement pendant 7 jours. Observez. Décidez ensuite.",
-      takeaway: "Plus n'est pas synonyme de mieux. L'impact réel se joue sur l'attention, le sommeil et l'intentionnalité."
+      title: "Synthèse et évaluation",
+      subtitle: "Réduisez l'usage durant sept jours. Documentez les évolutions. Concluez ensuite.",
+      takeaway: "Les données actuelles recommandent la préservation du sommeil, la gestion de l'attention et l'introduction de friction délibérée."
     }
   }
 };
 
-io.on('connection', (socket: Socket) => {
-  state.participants++;
+function broadcastParticipantCount() {
+  state.participants = audienceSockets.size;
   io.emit('participantCount', state.participants);
+}
+
+io.on('connection', (socket: Socket) => {
+  const role = socket.handshake.query.role as string;
+  const isAudience = role === 'audience';
+
+  if (isAudience) {
+    audienceSockets.add(socket.id);
+  }
+
+  broadcastParticipantCount();
 
   socket.emit('syncState', {
     ...state,
+    participants: audienceSockets.size,
     localIp,
     serverPort: PORT,
     translations
@@ -601,17 +623,19 @@ io.on('connection', (socket: Socket) => {
     Object.keys(state.experimentLevel).forEach(k => state.experimentLevel[k] = 0);
     Object.keys(state.experimentOutcome).forEach(k => state.experimentOutcome[k] = 0);
     Object.keys(state.prediction.accuracy).forEach(k => state.prediction.accuracy[k] = 0);
-    state.prediction.appVotes = {};
+    Object.keys(state.prediction.appVotes).forEach(k => state.prediction.appVotes[k] = 0);
     state.timeWorth = [];
     state.phoneIdeas = [];
     state.ifThenList = [];
     state.finalReflections = [];
-    io.emit('syncState', { ...state, localIp, serverPort: PORT, translations });
+    io.emit('syncState', { ...state, participants: audienceSockets.size, localIp, serverPort: PORT, translations });
   });
 
   socket.on('disconnect', () => {
-    state.participants = Math.max(0, state.participants - 1);
-    io.emit('participantCount', state.participants);
+    if (audienceSockets.has(socket.id)) {
+      audienceSockets.delete(socket.id);
+      broadcastParticipantCount();
+    }
   });
 });
 
