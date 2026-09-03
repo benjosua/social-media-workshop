@@ -1,6 +1,6 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { createServer } from 'http';
-import { Server } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import os from 'os';
@@ -14,15 +14,17 @@ const io = new Server(httpServer, {
   cors: { origin: '*' }
 });
 
-const PORT = process.env.PORT || 4000;
+const PORT = Number(process.env.PORT) || 4000;
 
-// Helper to find local network IP for easy phone joining
-function getLocalIp() {
+function getLocalIp(): string {
   const nets = os.networkInterfaces();
   for (const name of Object.keys(nets)) {
-    for (const net of nets[name]) {
-      if (net.family === 'IPv4' && !net.internal) {
-        return net.address;
+    const netList = nets[name];
+    if (netList) {
+      for (const net of netList) {
+        if (net.family === 'IPv4' && !net.internal) {
+          return net.address;
+        }
       }
     }
   }
@@ -31,19 +33,45 @@ function getLocalIp() {
 
 const localIp = getLocalIp();
 
-// Serve audience web app static assets
 app.use(express.static(path.join(__dirname, 'public')));
 
-// State store
-const state = {
+interface AccuracyMap {
+  accurate: number;
+  under1h: number;
+  oneToTwoH: number;
+  over2h: number;
+  [key: string]: number;
+}
+
+interface WorkshopState {
+  currentSlide: number;
+  totalSlides: number;
+  participants: number;
+  prediction: {
+    appVotes: Record<string, number>;
+    accuracy: AccuracyMap;
+  };
+  screenTimePoll: Record<string, number>;
+  timeWorth: Array<{ id: number; text: string; timestamp: string }>;
+  evidencePrediction: {
+    metric: Record<string, number>;
+    studyType: Record<string, number>;
+  };
+  timeGoPoll: Record<string, number>;
+  triggers: Record<string, number>;
+  phoneIdeas: Array<{ id: number; idea: string }>;
+  experimentLevel: Record<string, number>;
+  experimentOutcome: Record<string, number>;
+  ifThenList: Array<{ id: number; trigger: string; response: string }>;
+  finalReflections: Array<{ id: number; text: string }>;
+}
+
+const state: WorkshopState = {
   currentSlide: 1,
   totalSlides: 15,
-  slideMeta: {},
   participants: 0,
-  // Slide 2: Predict screen time
   prediction: {
     appVotes: {},
-    timeVotes: {},
     accuracy: {
       accurate: 0,
       under1h: 0,
@@ -51,7 +79,6 @@ const state = {
       over2h: 0
     }
   },
-  // Slide 3: Screen time brackets
   screenTimePoll: {
     '<2 h': 0,
     '2–3 h': 0,
@@ -61,9 +88,7 @@ const state = {
     '6–8 h': 0,
     '8 h+': 0
   },
-  // Slide 4: 30 minutes back open ideas
   timeWorth: [],
-  // Slide 5: Strongest correlation & convincing evidence
   evidencePrediction: {
     metric: {
       'IQ': 0,
@@ -80,7 +105,6 @@ const state = {
       'Meta-analysis': 0
     }
   },
-  // Slide 9: Where did the time go?
   timeGoPoll: {
     'Another screen': 0,
     'Studying': 0,
@@ -90,7 +114,6 @@ const state = {
     'Outdoors': 0,
     'Nothing': 0
   },
-  // Slide 11: Triggers
   triggers: {
     'immediately after waking': 0,
     'before sleep': 0,
@@ -101,9 +124,7 @@ const state = {
     'while waiting': 0,
     'without really deciding': 0
   },
-  // Slide 12: Design phone ideas
   phoneIdeas: [],
-  // Slide 13: 7-day experiment
   experimentLevel: {
     'Level 1: Reduce (≤60m/no short form)': 0,
     'Level 2: Remove (delete apps, desktop only)': 0,
@@ -118,14 +139,21 @@ const state = {
     'no difference': 0,
     'harder than expected': 0
   },
-  // Slide 14: Trigger-Response Implementation Intentions
   ifThenList: [],
-  // Slide 15: Final reflections
   finalReflections: []
 };
 
-// Available translations for the 15 slides
-const translations = {
+type SlideTranslation = {
+  title?: string;
+  subtitle?: string;
+  quote?: string;
+  prompt?: string;
+  prompt1?: string;
+  prompt2?: string;
+  takeaway?: string;
+};
+
+const translations: Record<string, Record<number, SlideTranslation>> = {
   en: {
     1: {
       title: "What Is Social Media Costing You?",
@@ -448,11 +476,10 @@ const translations = {
   }
 };
 
-io.on('connection', (socket) => {
+io.on('connection', (socket: Socket) => {
   state.participants++;
   io.emit('participantCount', state.participants);
 
-  // Send full state to newly connected client
   socket.emit('syncState', {
     ...state,
     localIp,
@@ -460,44 +487,40 @@ io.on('connection', (socket) => {
     translations
   });
 
-  // Slide navigation broadcasted by presenter
-  socket.on('setSlide', (slideNum) => {
+  socket.on('setSlide', (slideNum: number | string) => {
     state.currentSlide = Number(slideNum);
     io.emit('slideChanged', {
       currentSlide: state.currentSlide,
       translations: {
-        en: translations.en[state.currentSlide] || {},
-        de: translations.de[state.currentSlide] || {},
-        es: translations.es[state.currentSlide] || {},
-        fr: translations.fr[state.currentSlide] || {}
+        en: translations['en']?.[state.currentSlide] || {},
+        de: translations['de']?.[state.currentSlide] || {},
+        es: translations['es']?.[state.currentSlide] || {},
+        fr: translations['fr']?.[state.currentSlide] || {}
       }
     });
   });
 
-  // Poll 2: Accuracy
-  socket.on('submitAccuracy', (val) => {
+  socket.on('submitAccuracy', (val: string) => {
     if (state.prediction.accuracy[val] !== undefined) {
       state.prediction.accuracy[val]++;
       io.emit('accuracyUpdate', state.prediction.accuracy);
     }
   });
 
-  socket.on('submitAppGuess', (app) => {
+  socket.on('submitAppGuess', (app: string) => {
     if (!app) return;
     state.prediction.appVotes[app] = (state.prediction.appVotes[app] || 0) + 1;
     io.emit('appGuessUpdate', state.prediction.appVotes);
   });
 
-  // Poll 3: Screen time bracket
-  socket.on('submitScreenTime', (bracket) => {
+  socket.on('submitScreenTime', (bracket: string) => {
     if (state.screenTimePoll[bracket] !== undefined) {
       state.screenTimePoll[bracket]++;
       io.emit('screenTimeUpdate', state.screenTimePoll);
     }
   });
 
-  // Slide 4: 30 minutes open ideas
-  socket.on('submitTimeWorth', (text) => {
+  socket.on('submitTimeWorth', (text: string) => {
     if (!text || text.trim().length === 0) return;
     const clean = text.trim().slice(0, 60);
     state.timeWorth.push({ id: Date.now(), text: clean, timestamp: new Date().toLocaleTimeString() });
@@ -505,62 +528,56 @@ io.on('connection', (socket) => {
     io.emit('timeWorthUpdate', state.timeWorth);
   });
 
-  // Slide 5: Evidence prediction
-  socket.on('submitEvidenceMetric', (metric) => {
+  socket.on('submitEvidenceMetric', (metric: string) => {
     if (state.evidencePrediction.metric[metric] !== undefined) {
       state.evidencePrediction.metric[metric]++;
       io.emit('evidenceMetricUpdate', state.evidencePrediction.metric);
     }
   });
 
-  socket.on('submitStudyType', (studyType) => {
+  socket.on('submitStudyType', (studyType: string) => {
     if (state.evidencePrediction.studyType[studyType] !== undefined) {
       state.evidencePrediction.studyType[studyType]++;
       io.emit('studyTypeUpdate', state.evidencePrediction.studyType);
     }
   });
 
-  // Slide 9: Where did time go
-  socket.on('submitTimeGo', (cat) => {
+  socket.on('submitTimeGo', (cat: string) => {
     if (state.timeGoPoll[cat] !== undefined) {
       state.timeGoPoll[cat]++;
       io.emit('timeGoUpdate', state.timeGoPoll);
     }
   });
 
-  // Slide 11: Trigger poll
-  socket.on('submitTrigger', (trigger) => {
+  socket.on('submitTrigger', (trigger: string) => {
     if (state.triggers[trigger] !== undefined) {
       state.triggers[trigger]++;
       io.emit('triggerUpdate', state.triggers);
     }
   });
 
-  // Slide 12: Phone design ideas
-  socket.on('submitPhoneIdea', (idea) => {
+  socket.on('submitPhoneIdea', (idea: string) => {
     if (!idea || idea.trim().length === 0) return;
     state.phoneIdeas.push({ id: Date.now(), idea: idea.trim().slice(0, 100) });
     if (state.phoneIdeas.length > 60) state.phoneIdeas.shift();
     io.emit('phoneIdeasUpdate', state.phoneIdeas);
   });
 
-  // Slide 13: 7-day challenge
-  socket.on('submitExperimentLevel', (level) => {
+  socket.on('submitExperimentLevel', (level: string) => {
     if (state.experimentLevel[level] !== undefined) {
       state.experimentLevel[level]++;
       io.emit('experimentLevelUpdate', state.experimentLevel);
     }
   });
 
-  socket.on('submitExperimentOutcome', (outcome) => {
+  socket.on('submitExperimentOutcome', (outcome: string) => {
     if (state.experimentOutcome[outcome] !== undefined) {
       state.experimentOutcome[outcome]++;
       io.emit('experimentOutcomeUpdate', state.experimentOutcome);
     }
   });
 
-  // Slide 14: If-Then rule
-  socket.on('submitIfThen', ({ trigger, response }) => {
+  socket.on('submitIfThen', ({ trigger, response }: { trigger: string; response: string }) => {
     if (!trigger || !response) return;
     state.ifThenList.push({
       id: Date.now(),
@@ -571,14 +588,12 @@ io.on('connection', (socket) => {
     io.emit('ifThenUpdate', state.ifThenList);
   });
 
-  // Slide 15: Reflection
-  socket.on('submitReflection', (text) => {
+  socket.on('submitReflection', (text: string) => {
     if (!text || text.trim().length === 0) return;
     state.finalReflections.push({ id: Date.now(), text: text.trim().slice(0, 120) });
     io.emit('finalReflectionsUpdate', state.finalReflections);
   });
 
-  // Reset data if presenter requests
   socket.on('resetData', () => {
     Object.keys(state.screenTimePoll).forEach(k => state.screenTimePoll[k] = 0);
     Object.keys(state.timeGoPoll).forEach(k => state.timeGoPoll[k] = 0);
@@ -600,7 +615,7 @@ io.on('connection', (socket) => {
   });
 });
 
-app.get('/api/info', (req, res) => {
+app.get('/api/info', (_req: Request, res: Response) => {
   res.json({
     localIp,
     port: PORT,

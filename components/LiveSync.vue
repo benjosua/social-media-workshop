@@ -1,20 +1,33 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { io } from 'socket.io-client'
+import { io, Socket } from 'socket.io-client'
 import QRCode from 'qrcode'
 
-const props = defineProps({
-  slide: {
-    type: Number,
-    required: true
-  }
-})
+interface LiveState {
+  screenTimePoll: Record<string, number>
+  accuracy: Record<string, number>
+  appVotes: Record<string, number>
+  timeWorth: Array<{ id: number; text: string; timestamp?: string }>
+  evidenceMetric: Record<string, number>
+  studyType: Record<string, number>
+  timeGoPoll: Record<string, number>
+  triggers: Record<string, number>
+  phoneIdeas: Array<{ id: number; idea: string }>
+  experimentLevel: Record<string, number>
+  experimentOutcome: Record<string, number>
+  ifThenList: Array<{ id: number; trigger: string; response: string }>
+  finalReflections: Array<{ id: number; text: string }>
+}
 
-const socket = ref(null)
-const qrDataUrl = ref('')
-const audienceUrl = ref('')
-const participantCount = ref(0)
-const liveState = ref({
+const props = defineProps<{
+  slide: number
+}>()
+
+const socket = ref<Socket | null>(null)
+const qrDataUrl = ref<string>('')
+const audienceUrl = ref<string>('')
+const participantCount = ref<number>(0)
+const liveState = ref<LiveState>({
   screenTimePoll: {},
   accuracy: {},
   appVotes: {},
@@ -31,8 +44,9 @@ const liveState = ref({
 })
 
 onMounted(async () => {
+  const host = window.location.hostname || 'localhost'
   try {
-    const res = await fetch('http://' + window.location.hostname + ':4000/api/info')
+    const res = await fetch(`http://${host}:4000/api/info`)
     const data = await res.json()
     audienceUrl.value = data.audienceUrl
     qrDataUrl.value = await QRCode.toDataURL(data.audienceUrl, {
@@ -44,23 +58,22 @@ onMounted(async () => {
       }
     })
   } catch (e) {
-    audienceUrl.value = `http://${window.location.hostname}:4000`
+    audienceUrl.value = `http://${host}:4000`
     qrDataUrl.value = await QRCode.toDataURL(audienceUrl.value, { width: 260, margin: 2 })
   }
 
-  // Connect socket
-  const socketUrl = 'http://' + window.location.hostname + ':4000'
+  const socketUrl = `http://${host}:4000`
   socket.value = io(socketUrl)
 
   socket.value.on('connect', () => {
-    socket.value.emit('setSlide', props.slide)
+    socket.value?.emit('setSlide', props.slide)
   })
 
-  socket.value.on('participantCount', (count) => {
+  socket.value.on('participantCount', (count: number) => {
     participantCount.value = count
   })
 
-  socket.value.on('syncState', (state) => {
+  socket.value.on('syncState', (state: any) => {
     participantCount.value = state.participants
     if (state.screenTimePoll) liveState.value.screenTimePoll = state.screenTimePoll
     if (state.prediction) {
@@ -81,29 +94,30 @@ onMounted(async () => {
     if (state.finalReflections) liveState.value.finalReflections = state.finalReflections
   })
 
-  socket.value.on('accuracyUpdate', (acc) => { liveState.value.accuracy = acc })
-  socket.value.on('appGuessUpdate', (apps) => { liveState.value.appVotes = apps })
-  socket.value.on('screenTimeUpdate', (data) => { liveState.value.screenTimePoll = data })
-  socket.value.on('timeWorthUpdate', (data) => { liveState.value.timeWorth = data })
-  socket.value.on('evidenceMetricUpdate', (data) => { liveState.value.evidenceMetric = data })
-  socket.value.on('studyTypeUpdate', (data) => { liveState.value.studyType = data })
-  socket.value.on('timeGoUpdate', (data) => { liveState.value.timeGoPoll = data })
-  socket.value.on('triggerUpdate', (data) => { liveState.value.triggers = data })
-  socket.value.on('phoneIdeasUpdate', (data) => { liveState.value.phoneIdeas = data })
-  socket.value.on('experimentLevelUpdate', (data) => { liveState.value.experimentLevel = data })
-  socket.value.on('experimentOutcomeUpdate', (data) => { liveState.value.experimentOutcome = data })
-  socket.value.on('ifThenUpdate', (data) => { liveState.value.ifThenList = data })
-  socket.value.on('finalReflectionsUpdate', (data) => { liveState.value.finalReflections = data })
+  socket.value.on('accuracyUpdate', (acc: Record<string, number>) => { liveState.value.accuracy = acc })
+  socket.value.on('appGuessUpdate', (apps: Record<string, number>) => { liveState.value.appVotes = apps })
+  socket.value.on('screenTimeUpdate', (data: Record<string, number>) => { liveState.value.screenTimePoll = data })
+  socket.value.on('timeWorthUpdate', (data: Array<{ id: number; text: string }>) => { liveState.value.timeWorth = data })
+  socket.value.on('evidenceMetricUpdate', (data: Record<string, number>) => { liveState.value.evidenceMetric = data })
+  socket.value.on('studyTypeUpdate', (data: Record<string, number>) => { liveState.value.studyType = data })
+  socket.value.on('timeGoUpdate', (data: Record<string, number>) => { liveState.value.timeGoPoll = data })
+  socket.value.on('triggerUpdate', (data: Record<string, number>) => { liveState.value.triggers = data })
+  socket.value.on('phoneIdeasUpdate', (data: Array<{ id: number; idea: string }>) => { liveState.value.phoneIdeas = data })
+  socket.value.on('experimentLevelUpdate', (data: Record<string, number>) => { liveState.value.experimentLevel = data })
+  socket.value.on('experimentOutcomeUpdate', (data: Record<string, number>) => { liveState.value.experimentOutcome = data })
+  socket.value.on('ifThenUpdate', (data: Array<{ id: number; trigger: string; response: string }>) => { liveState.value.ifThenList = data })
+  socket.value.on('finalReflectionsUpdate', (data: Array<{ id: number; text: string }>) => { liveState.value.finalReflections = data })
 })
 
-watch(() => props.slide, (newSlide) => {
+watch(() => props.slide, (newSlide: number) => {
   if (socket.value && socket.value.connected) {
     socket.value.emit('setSlide', newSlide)
   }
 })
 
-function calcPercent(val, dict) {
-  const sum = Object.values(dict || {}).reduce((a, b) => a + Number(b), 0)
+function calcPercent(val: number | undefined, dict: Record<string, number> | undefined): number {
+  if (!dict) return 0
+  const sum = Object.values(dict).reduce((a, b) => a + Number(b), 0)
   if (!sum) return 0
   return Math.round((Number(val || 0) / sum) * 100)
 }

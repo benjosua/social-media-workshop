@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "slidev --port 3030 --remote",
     "build": "slidev build",
-    "server": "node server.js",
-    "start": "concurrently \"node server.js\" \"slidev --port 3030 --remote\""
+    "server": "tsx server.ts",
+    "start": "concurrently -k \"tsx server.ts\" \"slidev --port 3030 --remote\"",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@slidev/cli": "^51.4.0",
@@ -20,6 +21,11 @@
     "vue": "^3.5.13"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.4.1",
+    "@types/qrcode": "^1.5.6",
+    "concurrently": "^9.1.2",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
   }
 }
